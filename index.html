@@ -1,19 +1,237 @@
 <!DOCTYPE html>
 <html lang="en">
+<head>
 <meta charset="UTF-8">
-<title>Page Title</title>
+<title>Card Night</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="">
 <style>
+  :root {
+    --bg: #f7f5f0;
+    --fg: #1f1f1f;
+    --muted: #666;
+    --border: #d8d4cc;
+    --card: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  main {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 1.5rem 1rem 3rem;
+  }
+  h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    text-align: center;
+    margin: 0 0 1rem;
+    letter-spacing: 0.02em;
+  }
+  h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 2rem 0 0.75rem;
+    text-align: center;
+  }
+  .scoreboard {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem 1rem;
+    text-align: center;
+  }
+  .teams {
+    font-size: 1rem;
+    color: var(--muted);
+    margin-bottom: 0.4rem;
+  }
+  .totals {
+    font-size: 2rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .quote {
+    font-style: italic;
+    text-align: center;
+    color: #333;
+    margin: 1.5rem 0.5rem 0;
+    font-size: 1.05rem;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    font-variant-numeric: tabular-nums;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    font-weight: 600;
+    background: #faf8f3;
+  }
+  tr:last-child td { border-bottom: none; }
+  td.score { text-align: right; }
+  th.score { text-align: right; }
+  .status {
+    text-align: center;
+    color: var(--muted);
+    padding: 2rem 1rem;
+  }
+  .status.error { color: #a33; }
 </style>
-<script src=""></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+</head>
 <body>
+<main>
+  <h1>Card Night</h1>
+  <div id="content">
+    <div class="status">Loading…</div>
+  </div>
+</main>
+<script>
+(function () {
+  var CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQfLiGXsqD6hk_bD3Hu7cTzhHPiy_wN4gWvqtTF2ewhreeG6DS8YRXnyPEZPToyw7FaGaWlfhyNNLrE/pub?output=csv";
+  var COL_DATE = "Date";
+  var COL_GJ = "What was Gil and Jim's score?";
+  var COL_JT = "What was Jennie and Teri's score?";
+  var COL_QUOTE = "Quote of the night";
 
-<div class="">
- <h1>This is a Heading</h1>
- <p>This is a paragraph.</p>
- <p>This is another paragraph.</p>
-</div>
+  var content = document.getElementById("content");
 
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function parseDate(raw) {
+    if (!raw) return { date: null, display: "" };
+    var d = new Date(raw);
+    if (isNaN(d.getTime())) {
+      return { date: null, display: String(raw) };
+    }
+    var display = d.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric"
+    });
+    return { date: d, display: display };
+  }
+
+  function toInt(v) {
+    var n = parseInt(String(v).trim(), 10);
+    return isNaN(n) ? null : n;
+  }
+
+  function render(rows) {
+    var games = rows
+      .map(function (r) {
+        var gj = toInt(r[COL_GJ]);
+        var jt = toInt(r[COL_JT]);
+        if (gj === null || jt === null) return null;
+        var parsed = parseDate(r[COL_DATE]);
+        return {
+          date: parsed.date,
+          dateDisplay: parsed.display,
+          gj: gj,
+          jt: jt,
+          quote: (r[COL_QUOTE] || "").trim()
+        };
+      })
+      .filter(function (g) { return g !== null; });
+
+    if (games.length === 0) {
+      content.innerHTML = '<div class="status">No games recorded yet</div>';
+      return;
+    }
+
+    games.sort(function (a, b) {
+      if (a.date && b.date) return b.date - a.date;
+      if (a.date) return -1;
+      if (b.date) return 1;
+      return 0;
+    });
+
+    var gjWins = 0, jtWins = 0;
+    games.forEach(function (g) {
+      if (g.gj > g.jt) gjWins++;
+      else if (g.jt > g.gj) jtWins++;
+    });
+
+    var latestQuote = games[0].quote;
+
+    var tableRows = games.map(function (g) {
+      return '<tr><td>' + escapeHtml(g.dateDisplay) +
+        '</td><td class="score">' + g.gj + ' - ' + g.jt + '</td></tr>';
+    }).join("");
+
+    var html =
+      '<h2>All Time Wins</h2>' +
+      '<div class="scoreboard">' +
+        '<div class="teams">Gil &amp; Jim &nbsp;—&nbsp; Jennie &amp; Teri</div>' +
+        '<div class="totals">' + gjWins + ' &nbsp;—&nbsp; ' + jtWins + '</div>' +
+      '</div>';
+
+    if (latestQuote) {
+      html += '<div class="quote">&ldquo;' + escapeHtml(latestQuote) + '&rdquo;</div>';
+    }
+
+    html +=
+      '<h2>History</h2>' +
+      '<table>' +
+        '<thead><tr><th>Date</th><th class="score">Score</th></tr></thead>' +
+        '<tbody>' + tableRows + '</tbody>' +
+      '</table>';
+
+    content.innerHTML = html;
+  }
+
+  function showError() {
+    content.innerHTML = '<div class="status error">Couldn\'t load scores. Please try again in a moment.</div>';
+  }
+
+  var url = CSV_URL + "&t=" + Date.now();
+  Papa.parse(url, {
+    download: true,
+    header: true,
+    skipEmptyLines: true,
+    complete: function (results) {
+      try {
+        render(results.data || []);
+      } catch (e) {
+        console.error(e);
+        showError();
+      }
+    },
+    error: function (err) {
+      console.error(err);
+      showError();
+    }
+  });
+})();
+</script>
 </body>
 </html>
